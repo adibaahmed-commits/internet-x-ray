@@ -17,6 +17,7 @@ class Building(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=True)
     image_path = Column(String, nullable=False)
+    status = Column(String, default="pending")
     analysis_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

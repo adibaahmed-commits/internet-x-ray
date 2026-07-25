@@ -9,10 +9,13 @@ from dotenv import load_dotenv
 
 from db.database import init_db
 from routes import building
+from routes import image
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv()
 
 app = FastAPI(title="Building Analyzer API")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,8 +26,10 @@ app.add_middleware(
 )
 
 app.include_router(building.router)
+app.include_router(image.router)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-genai.configure(api_key=os.getenv("AQ.Ab8RN6J4EwsuFlpI0aC_3x5RB9EZ4uaCmKlzritXDKqhaW2-Mg"))
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel("gemini-3.5-flash-lite")
 
 
