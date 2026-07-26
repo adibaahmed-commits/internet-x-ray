@@ -18,4 +18,5 @@ __pycache__/
 .DS_Store
 buildings.db
 uploads/*
-!uploads/.gitkeep
+!uploads/.gitkeeptest.db
+test.db

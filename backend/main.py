@@ -1,20 +1,29 @@
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import google.generativeai as genai
-from PIL import Image
-import json
-import io
-import os
 from dotenv import load_dotenv
-
 from db.database import init_db
 from routes import building
 from routes import image
 from fastapi.staticfiles import StaticFiles
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+import logging
+
+logger = logging.getLogger("uvicorn.error")
 
 load_dotenv()
 
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+
 app = FastAPI(title="Building Analyzer API")
+
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
@@ -27,10 +36,20 @@ app.add_middleware(
 
 app.include_router(building.router)
 app.include_router(image.router)
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-3.5-flash-lite")
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(status_code=422, content={"error": "Invalid request data", "details": exc.errors()})
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled error on {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(status_code=500, content={"error": "Internal server error"})
 
 
 @app.on_event("startup")
@@ -46,27 +65,3 @@ def home():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
-
-
-@app.post("/analyze")
-async def analyze_building(file: UploadFile = File(...)):
-    image_bytes = await file.read()
-    image = Image.open(io.BytesIO(image_bytes))
-
-    prompt = """Analyze this photo of an apartment building. Based on visible cues 
-    (architecture style, condition, materials, signage, surroundings), return ONLY 
-    a JSON object with these fields: estimated_age, condition_notes, building_type, 
-    notable_features, estimated_neighborhood_class. Be clear this is a visual 
-    estimate, not verified data."""
-
-    response = model.generate_content([prompt, image])
-
-    text = response.text.strip()
-    if text.startswith("```"):
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
-    text = text.strip()
-
-    data = json.loads(text)
-    return data
