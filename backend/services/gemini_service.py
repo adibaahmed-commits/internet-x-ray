@@ -29,6 +29,8 @@ def analyze_building_image(image_path: str) -> dict:
             "exterior_material": str | None,
             "notable_features": list[str],
             "architectural_style": str | None,
+            "estimated_rental_price": str | None,   # e.g. "₹35,000-₹45,000/mo"
+            "visible_amenities": list[str],         # e.g. ["parking", "balconies"]
             "confidence": str,          # "high" | "medium" | "low"
             "summary": str,
         }
@@ -45,6 +47,8 @@ def analyze_building_image(image_path: str) -> dict:
         "exterior_material": "brick",
         "notable_features": ["balconies", "flat roof"],
         "architectural_style": "unclear",
+        "estimated_rental_price": "₹35,000-₹45,000/mo",
+        "visible_amenities": ["parking", "balconies"],
         "confidence": "medium",
         "summary": "This is placeholder analysis data for backend testing.",
     }
@@ -53,3 +57,4 @@ if __name__ == "__main__":
     print(result)
     assert "condition" in result
     assert "notable_features" in result
+    
