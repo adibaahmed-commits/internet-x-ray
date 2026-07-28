@@ -1,4 +1,3 @@
-# services/gemini_service.py
 """
 Interface contract for building image analysis.
 TODO(ai-team): replace the body of analyze_building_image() with the real
@@ -27,11 +26,13 @@ def analyze_building_image(image_path: str) -> dict:
             "estimated_year_built": str,
             "estimated_stories": int | None,
             "condition": str,           # "excellent" | "good"| "fair" | "poor"
-            "exterior_material": str | None,
             "notable_features": list[str],
             "architectural_style": str | None,
             "estimated_rental_price": str | None,   # e.g. "₹35,000-₹45,000/mo"
             "visible_amenities": list[str],         # e.g. ["parking", "balconies"]
+            "nearby_hospitals": list[str],          # e.g. ["City Hospital - 1.2km"]
+            "nearby_schools": list[str],            # e.g. ["DPS School - 0.8km"]
+            "network_coverage": str | None,         # e.g. "Jio, Airtel - Strong"
             "confidence": str,          # "high" | "medium" | "low"
             "summary": str,
         }
@@ -47,11 +48,13 @@ def analyze_building_image(image_path: str) -> dict:
             "estimated_year_built": "1990-2000",
             "estimated_stories": 5,
             "condition": "good",
-            "exterior_material": "brick",
             "notable_features": ["balconies", "flat roof"],
             "architectural_style": "unclear",
             "estimated_rental_price": "₹35,000-₹45,000/mo",
             "visible_amenities": ["parking", "balconies"],
+            "nearby_hospitals": ["City Hospital - 1.2km", "Apollo Clinic - 2.5km"],
+            "nearby_schools": ["DPS School - 0.8km", "St. Mary's School - 1.5km"],
+            "network_coverage": "Jio, Airtel - Strong",
             "confidence": "medium",
             "summary": "This is placeholder analysis data for backend testing.",
         }
