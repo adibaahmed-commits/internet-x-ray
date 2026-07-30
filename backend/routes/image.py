@@ -1,5 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, Depends
+from fastapi import APIRouter, UploadFile, File, Form, Depends
 from sqlalchemy.orm import Session
+from typing import Optional
 
 from db.database import get_db, Building
 from services.storage_service import save_upload_file
@@ -12,12 +13,19 @@ router = APIRouter()
 @router.post("/buildings/upload", response_model=UploadResponse)
 async def upload_building_image(
     file: UploadFile = File(...),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
     db: Session = Depends(get_db),
 ):
     validate_image_file(file)
     filename = save_upload_file(file)
 
-    building = Building(image_path=filename, status="pending")
+    building = Building(
+        image_path=filename,
+        latitude=latitude, 
+        longitude=longitude,
+        status="pending",
+    )
     db.add(building)
     db.commit()
     db.refresh(building)
