@@ -1,5 +1,6 @@
 # routes/building.py
 import json
+import os
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -7,7 +8,7 @@ from sqlalchemy import desc
 from db.database import get_db, Building
 from services.gemini_service import analyze_building_image, BuildingAnalysisError
 from services.storage_service import UPLOAD_DIR
-from schemas.building import BuildingListItem, BuildingDetail   # <-- new import
+from schemas.building import BuildingListItem, BuildingDetail
 
 router = APIRouter(prefix="/buildings", tags=["buildings"])
 
@@ -30,7 +31,8 @@ def analyze_building(building_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     try:
-        analysis = analyze_building_image(building.image_path)
+        full_image_path = os.path.join(UPLOAD_DIR, building.image_path)
+        analysis = analyze_building_image(full_image_path)
     except BuildingAnalysisError as e:
         building.status = "failed"
         db.commit()
@@ -47,8 +49,6 @@ def analyze_building(building_id: int, db: Session = Depends(get_db)):
         "analysis": analysis,
     }
 
-
-# ---- new endpoints below ----
 
 @router.get("", response_model=list[BuildingListItem])
 def list_buildings(db: Session = Depends(get_db)):

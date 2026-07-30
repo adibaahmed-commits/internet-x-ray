@@ -15,5 +15,7 @@ def validate_image_file(file: UploadFile) -> None:
     size = file.file.tell()
     file.file.seek(0)
 
+    print(f"DEBUG: calculated file size = {size} bytes")
+
     if size > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="File exceeds 10MB limit")
