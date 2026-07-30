@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 import json
+import os
 
 from db.database import Building, get_db
 from schemas.building import BuildingDetail
 from services.places_service import get_nearby_places
 from services.gemini_service import analyze_building_image
+from services.storage_service import UPLOAD_DIR
 
 router = APIRouter()
 
@@ -36,6 +38,7 @@ def get_building_details(building_id: int, db: Session = Depends(get_db)):
         schools=schools,
         shopping_centers=shopping_centers,
     )
+
 @router.post("/buildings/{building_id}/analyze", response_model=BuildingDetail)
 def analyze_building(building_id: int, db: Session = Depends(get_db)):
     building = db.query(Building).filter(Building.id == building_id).first()
@@ -43,7 +46,8 @@ def analyze_building(building_id: int, db: Session = Depends(get_db)):
     if not building:
         raise HTTPException(status_code=404, detail="Building not found")
 
-    analysis_result = analyze_building_image(building.image_path)
+    full_image_path = os.path.join(UPLOAD_DIR, building.image_path)
+    analysis_result = analyze_building_image(full_image_path)
 
     building.analysis_json = json.dumps(analysis_result)
     building.status = "complete"
@@ -68,3 +72,4 @@ def analyze_building(building_id: int, db: Session = Depends(get_db)):
         schools=schools,
         shopping_centers=shopping_centers,
     )
+
