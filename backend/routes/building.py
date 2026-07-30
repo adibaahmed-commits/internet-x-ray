@@ -6,7 +6,7 @@ import os
 from db.database import Building, get_db
 from schemas.building import BuildingDetail
 from services.places_service import get_nearby_places
-from services.gemini_service import analyze_building_image
+from services.gemini_service import analyze_building_image, BuildingAnalysisError
 from services.storage_service import UPLOAD_DIR
 
 router = APIRouter()
@@ -47,7 +47,17 @@ def analyze_building(building_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Building not found")
 
     full_image_path = os.path.join(UPLOAD_DIR, building.image_path)
-    analysis_result = analyze_building_image(full_image_path)
+
+    if not os.path.exists(full_image_path):
+        raise HTTPException(
+            status_code=410,
+            detail="Original image is no longer available. Please re-upload."
+        )
+
+    try:
+        analysis_result = analyze_building_image(full_image_path)
+    except BuildingAnalysisError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
     building.analysis_json = json.dumps(analysis_result)
     building.status = "complete"

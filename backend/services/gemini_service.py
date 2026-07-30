@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import logging
 from dotenv import load_dotenv
 from google import genai
@@ -38,39 +39,61 @@ If the image does not clearly show a building, still return this shape,
 setting confidence to "low" and explaining in summary.
 """
 
+REQUIRED_FIELDS = [
+    "building_type", "estimated_year_built", "estimated_stories",
+    "condition", "exterior_material", "notable_features",
+    "architectural_style", "estimated_rental_price",
+    "visible_amenities", "confidence", "summary"
+]
+
+MAX_ATTEMPTS = 3
+
+
+def _is_transient(error: Exception) -> bool:
+    msg = str(error)
+    return "UNAVAILABLE" in msg or "503" in msg or "overloaded" in msg.lower()
+
 
 def analyze_building_image(image_path: str) -> dict:
     logger.info(f"Gemini analysis started for image_path={image_path}")
-    try:
-        uploaded_file = client.files.upload(file=image_path)
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=[PROMPT, uploaded_file],
-        )
+    last_error = None
 
-        raw_text = response.text.strip()
-
+    for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            data = json.loads(raw_text)
-        except json.JSONDecodeError:
-            logger.error(f"Gemini returned non-JSON response: {raw_text}")
-            raise BuildingAnalysisError("Gemini did not return valid JSON")
+            uploaded_file = client.files.upload(file=image_path)
+            response = client.models.generate_content(
+                model="gemini-3.5-flash",
+                contents=[PROMPT, uploaded_file],
+            )
 
-        required_fields = [
-            "building_type", "estimated_year_built", "estimated_stories",
-            "condition", "exterior_material", "notable_features",
-            "architectural_style", "estimated_rental_price",
-            "visible_amenities", "confidence", "summary"
-        ]
-        missing = [f for f in required_fields if f not in data]
-        if missing:
-            logger.error(f"Gemini response missing fields: {missing}")
-            raise BuildingAnalysisError(f"Missing fields in response: {missing}")
+            raw_text = response.text.strip()
 
-        return data
+            try:
+                data = json.loads(raw_text)
+            except json.JSONDecodeError:
+                logger.error(f"Gemini returned non-JSON response: {raw_text}")
+                raise BuildingAnalysisError("Gemini did not return valid JSON")
 
-    except BuildingAnalysisError:
-        raise
-    except Exception as e:
-        logger.error(f"Gemini analysis failed: {e}")
-        raise BuildingAnalysisError(f"Failed to analyze image: {e}")
+            missing = [f for f in REQUIRED_FIELDS if f not in data]
+            if missing:
+                logger.error(f"Gemini response missing fields: {missing}")
+                raise BuildingAnalysisError(f"Missing fields in response: {missing}")
+
+            return data
+
+        except BuildingAnalysisError:
+            raise
+        except Exception as e:
+            last_error = e
+            if _is_transient(e) and attempt < MAX_ATTEMPTS:
+                wait = 2 ** (attempt - 1)  # 1s, 2s, 4s
+                logger.warning(
+                    f"Gemini transient error (attempt {attempt}/{MAX_ATTEMPTS}), "
+                    f"retrying in {wait}s: {e}"
+                )
+                time.sleep(wait)
+                continue
+            logger.error(f"Gemini analysis failed: {e}")
+            raise BuildingAnalysisError(f"Failed to analyze image: {e}")
+
+    raise BuildingAnalysisError(f"Failed to analyze image after retries: {last_error}")
