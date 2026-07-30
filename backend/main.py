@@ -30,6 +30,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://super-babka-6aa76c.netlify.app",
+        "https://celebrated-biscotti-f91d69.netlify.app",   # new URL added
         "http://127.0.0.1:5500",
     ],
     allow_credentials=True,
