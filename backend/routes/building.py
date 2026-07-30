@@ -1,82 +1,70 @@
-# routes/building.py
-import json
-import os
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+import json
 
-from db.database import get_db, Building
-from services.gemini_service import analyze_building_image, BuildingAnalysisError
-from services.storage_service import UPLOAD_DIR
-from schemas.building import BuildingListItem, BuildingDetail
+from db.database import Building, get_db
+from schemas.building import BuildingDetail
+from services.places_service import get_nearby_places
+from services.gemini_service import analyze_building_image
 
-router = APIRouter(prefix="/buildings", tags=["buildings"])
+router = APIRouter()
 
-
-@router.get("/ping")
-def ping():
-    return {"message": "building routes alive"}
-
-
-@router.post("/{building_id}/analyze")
-def analyze_building(building_id: int, db: Session = Depends(get_db)):
+@router.get("/buildings/{building_id}", response_model=BuildingDetail)
+def get_building_details(building_id: int, db: Session = Depends(get_db)):
     building = db.query(Building).filter(Building.id == building_id).first()
+
     if not building:
         raise HTTPException(status_code=404, detail="Building not found")
 
-    if not building.image_path:
-        raise HTTPException(status_code=400, detail="Building has no uploaded image")
+    analysis = json.loads(building.analysis_json) if building.analysis_json else None
 
-    building.status = "analyzing"
-    db.commit()
+    hospitals = schools = shopping_centers = None
+    if building.latitude is not None and building.longitude is not None:
+        nearby_data = get_nearby_places(lat=building.latitude, lon=building.longitude)
+        hospitals = nearby_data["hospitals"]
+        schools = nearby_data["schools"]
+        shopping_centers = nearby_data["shopping_centers"]
 
-    try:
-        full_image_path = os.path.join(UPLOAD_DIR, building.image_path)
-        analysis = analyze_building_image(full_image_path)
-    except BuildingAnalysisError as e:
-        building.status = "failed"
-        db.commit()
-        raise HTTPException(status_code=502, detail=f"Analysis failed: {str(e)}")
+    return BuildingDetail(
+        id=building.id,
+        name=building.name,
+        image_url=building.image_path,
+        status=building.status,
+        analysis_json=analysis,
+        created_at=building.created_at,
+        hospitals=hospitals,
+        schools=schools,
+        shopping_centers=shopping_centers,
+    )
+@router.post("/buildings/{building_id}/analyze", response_model=BuildingDetail)
+def analyze_building(building_id: int, db: Session = Depends(get_db)):
+    building = db.query(Building).filter(Building.id == building_id).first()
 
-    building.analysis_json = json.dumps(analysis)
+    if not building:
+        raise HTTPException(status_code=404, detail="Building not found")
+
+    analysis_result = analyze_building_image(building.image_path)
+
+    building.analysis_json = json.dumps(analysis_result)
     building.status = "complete"
     db.commit()
     db.refresh(building)
 
-    return {
-        "id": building.id,
-        "status": building.status,
-        "analysis": analysis,
-    }
+    hospitals = schools = shopping_centers = None
+    if building.latitude is not None and building.longitude is not None:
+        nearby_data = get_nearby_places(lat=building.latitude, lon=building.longitude)
+        hospitals = nearby_data["hospitals"]
+        schools = nearby_data["schools"]
+        shopping_centers = nearby_data["shopping_centers"]
 
-
-@router.get("", response_model=list[BuildingListItem])
-def list_buildings(db: Session = Depends(get_db)):
-    buildings = db.query(Building).order_by(desc(Building.id)).all()
-    return [
-        {
-            "id": b.id,
-            "name": b.name,
-            "image_url": f"/uploads/{b.image_path}",
-            "status": b.status,
-        }
-        for b in buildings
-    ]
-
-
-@router.get("/{building_id}", response_model=BuildingDetail)
-def get_building(building_id: int, db: Session = Depends(get_db)):
-    building = db.query(Building).filter(Building.id == building_id).first()
-    if not building:
-        raise HTTPException(status_code=404, detail="Building not found")
-
-    parsed_analysis = json.loads(building.analysis_json) if building.analysis_json else None
-
-    return {
-        "id": building.id,
-        "name": building.name,
-        "image_url": f"/uploads/{building.image_path}",
-        "status": building.status,
-        "analysis_json": parsed_analysis,
-        "created_at": building.created_at,
-    }
+    return BuildingDetail(
+        id=building.id,
+        name=building.name,
+        image_url=building.image_path,
+        status=building.status,
+        analysis_json=analysis_result,
+        created_at=building.created_at,
+        hospitals=hospitals,
+        schools=schools,
+        shopping_centers=shopping_centers,
+    )

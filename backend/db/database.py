@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Text, Float
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
 from config import DATABASE_URL
@@ -20,6 +20,8 @@ class Building(Base):
     status = Column(String, default="pending")
     analysis_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
 
 
 def init_db():

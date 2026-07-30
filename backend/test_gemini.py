@@ -19,14 +19,17 @@ def test_analyze_building_image_returns_expected_shape():
 
     expected_keys = {
         "building_type", "estimated_year_built", "estimated_stories",
-        "condition", "exterior_material", "notable_features",
+        "condition", "notable_features",
         "architectural_style", "estimated_rental_price",
-        "visible_amenities", "confidence", "summary",
+        "visible_amenities", "nearby_hospitals", "nearby_schools",
+        "network_coverage", "confidence", "summary",
     }
     assert expected_keys.issubset(result.keys())
     assert result["condition"] in {"excellent", "good", "fair", "poor"}
     assert isinstance(result["notable_features"], list)
     assert isinstance(result["visible_amenities"], list)
+    assert isinstance(result["nearby_hospitals"], list)
+    assert isinstance(result["nearby_schools"], list)
 
 
 @patch("routes.building.analyze_building_image")
@@ -38,11 +41,13 @@ def test_analyze_route_returns_gemini_result(mock_analyze, client):
         "estimated_year_built": "2000-2010",
         "estimated_stories": 3,
         "condition": "good",
-        "exterior_material": "concrete",
         "notable_features": ["test feature"],
         "architectural_style": "modern",
         "estimated_rental_price": "₹20,000/mo",
         "visible_amenities": ["parking"],
+        "nearby_hospitals": ["Test Hospital - 1km"],
+        "nearby_schools": ["Test School - 0.5km"],
+        "network_coverage": "Jio - Strong",
         "confidence": "high",
         "summary": "mocked analysis",
     }
