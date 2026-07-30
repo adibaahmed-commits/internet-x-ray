@@ -72,4 +72,3 @@ def analyze_building(building_id: int, db: Session = Depends(get_db)):
         schools=schools,
         shopping_centers=shopping_centers,
     )
-
