@@ -46,7 +46,7 @@ REQUIRED_FIELDS = [
     "visible_amenities", "confidence", "summary"
 ]
 
-MAX_ATTEMPTS = 3
+MAX_ATTEMPTS = 5
 
 
 def _is_transient(error: Exception) -> bool:
@@ -62,7 +62,7 @@ def analyze_building_image(image_path: str) -> dict:
         try:
             uploaded_file = client.files.upload(file=image_path)
             response = client.models.generate_content(
-                model="gemini-3.5-flash",
+                model="gemini-3.6-flash",
                 contents=[PROMPT, uploaded_file],
             )
 
