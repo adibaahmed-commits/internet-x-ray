@@ -16,7 +16,7 @@ from PIL.ExifTags import TAGS, GPSTAGS
 import io
 import json
 import os
-import google.generativeai as genai
+from google import genai
 
 load_dotenv()
 
@@ -131,13 +131,12 @@ async def analyze_with_gps(file: UploadFile = File(...)):
     # 2. Extract GPS
     gps_data = get_gps_from_image(contents)
 
-    # 3. Configure Gemini
+    # 3. Configure Gemini client
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="Gemini API Key missing in backend")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    client = genai.Client(api_key=api_key)
 
     # 4. Build Prompt
     if gps_data:
@@ -161,7 +160,13 @@ async def analyze_with_gps(file: UploadFile = File(...)):
 
     try:
         # 5. Send to Gemini
-        response = model.generate_content([prompt, contents])
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                prompt,
+                {"inline_data": {"mime_type": file.content_type or "image/jpeg", "data": contents}},
+            ],
+        )
         text = response.text.strip()
 
         # Clean up markdown if Gemini adds it anyway
