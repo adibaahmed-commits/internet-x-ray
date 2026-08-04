@@ -161,7 +161,7 @@ async def analyze_with_gps(file: UploadFile = File(...)):
     try:
         # 5. Send to Gemini
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.6-flash",
             contents=[
                 prompt,
                 {"inline_data": {"mime_type": file.content_type or "image/jpeg", "data": contents}},
