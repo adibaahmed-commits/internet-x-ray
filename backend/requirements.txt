@@ -1,44 +1,183 @@
-annotated-doc==0.0.4
-annotated-types==0.7.0
-anyio==4.14.2
-certifi==2026.7.22
-cffi==2.1.0
-charset-normalizer==3.4.9
-click==8.4.2
-colorama==0.4.6
-cryptography==49.0.0
-fastapi==0.139.2
-google-ai-generativelanguage==0.6.15
-google-api-core==2.25.2
-google-api-python-client==2.198.0
-google-auth==2.56.2
-google-auth-httplib2==0.4.0
-google-genai==1.2.0
-googleapis-common-protos==1.75.0
-greenlet==3.5.4
-grpcio==1.83.0
-grpcio-status==1.71.2
-h11==0.16.0
-httplib2==0.32.0
-idna==3.18
-pillow==12.3.0
-proto-plus==1.28.2
-protobuf==5.29.6
-pyasn1==0.6.4
-pyasn1_modules==0.4.2
-pycparser==3.0
-pydantic==2.13.4
-pydantic_core==2.46.4
-pyparsing==3.3.2
-python-dotenv==1.2.2
-python-multipart==0.0.32
-requests==2.34.2
-SQLAlchemy==2.0.51
-starlette==1.3.1
-tqdm==4.69.0
-typing-inspection==0.4.2
-typing_extensions==4.16.0
-uritemplate==4.2.0
-urllib3==2.7.0
-uvicorn==0.51.0
-google-generativeai>=0.3.0
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+from db.database import init_db
+from routes import building
+from routes import image
+from fastapi.staticfiles import StaticFiles
+from fastapi import Request
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+import logging
+from fastapi import UploadFile, File, HTTPException
+from PIL import Image
+from PIL.ExifTags import TAGS, GPSTAGS
+import io
+import json
+import os
+from google import genai
+
+load_dotenv()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("uvicorn.error")
+
+
+def get_gps_from_image(image_bytes):
+    """Extracts Latitude and Longitude from image EXIF data."""
+    try:
+        image = Image.open(io.BytesIO(image_bytes))
+        exif_data = image._getexif()
+
+        if not exif_data:
+            return None
+
+        gps_info = None
+        for tag_id, value in exif_data.items():
+            tag = TAGS.get(tag_id, tag_id)
+            if tag == "GPSInfo":
+                gps_info = value
+                break
+
+        if not gps_info:
+            return None
+
+        def convert_to_degrees(value):
+            d, m, s = value
+            return d + (m / 60.0) + (s / 3600.0)
+
+        lat = None
+        lon = None
+
+        if 'GPSLatitude' in gps_info and 'GPSLatitudeRef' in gps_info:
+            lat = convert_to_degrees(gps_info['GPSLatitude'])
+            if gps_info['GPSLatitudeRef'] != 'N':
+                lat = -lat
+
+        if 'GPSLongitude' in gps_info and 'GPSLongitudeRef' in gps_info:
+            lon = convert_to_degrees(gps_info['GPSLongitude'])
+            if gps_info['GPSLongitudeRef'] != 'E':
+                lon = -lon
+
+        if lat is not None and lon is not None:
+            return {"latitude": lat, "longitude": lon}
+        return None
+    except Exception as e:
+        logger.error(f"Error reading GPS: {e}")
+        return None
+
+
+app = FastAPI(title="Building Analyzer API")
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://super-babka-6aa76c.netlify.app",
+        "https://celebrated-biscotti-f91d69.netlify.app",
+        "https://adibaahmed-commits.github.io",   # GitHub Pages frontend
+        "http://127.0.0.1:5500",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(building.router)
+app.include_router(image.router)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(status_code=422, content={"error": "Invalid request data", "details": exc.errors()})
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled error on {request.url.path}: {exc}", exc_info=True)
+    return JSONResponse(status_code=500, content={"error": "Internal server error"})
+
+
+@app.on_event("startup")
+def on_startup():
+    init_db()
+
+
+@app.get("/")
+def home():
+    return {"message": "Hello World!"}
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+
+@app.post("/api/analyze-with-gps")
+async def analyze_with_gps(file: UploadFile = File(...)):
+    # 1. Read image bytes
+    contents = await file.read()
+
+    # 2. Extract GPS
+    gps_data = get_gps_from_image(contents)
+
+    # 3. Configure Gemini client
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="Gemini API Key missing in backend")
+
+    client = genai.Client(api_key=api_key)
+
+    # 4. Build Prompt
+    if gps_data:
+        location_context = f"This photo was taken at GPS Coordinates: Latitude {gps_data['latitude']}, Longitude {gps_data['longitude']}."
+    else:
+        location_context = "No GPS data found in this image. Please rely ONLY on visual clues (signs, landmarks) visible in the picture."
+
+    prompt = f"""
+    {location_context}
+
+    Analyze this image to identify nearby facilities.
+    Return a STRICT JSON object with no markdown formatting, no code blocks, just raw JSON.
+    Format:
+    {{
+        "schools": ["Name of nearest school visible or inferred"],
+        "hospitals": ["Name of nearest hospital visible or inferred"],
+        "shopping_centers": ["Name of nearest shopping center visible or inferred"]
+    }}
+    If nothing is found for a category, return an empty list [].
+    """
+
+    try:
+        # 5. Send to Gemini
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=[
+                prompt,
+                {"inline_data": {"mime_type": file.content_type or "image/jpeg", "data": contents}},
+            ],
+        )
+        text = response.text.strip()
+
+        # Clean up markdown if Gemini adds it anyway
+        if text.startswith("```json"):
+            text = text.replace("```json", "").replace("```", "")
+        if text.startswith("```"):
+            text = text.replace("```", "")
+
+        result = json.loads(text)
+        return result
+
+    except Exception as e:
+        logger.error(f"Gemini Error: {e}")
+        raise HTTPException(status_code=500, detail=f"AI Analysis failed: {str(e)}")
