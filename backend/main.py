@@ -113,7 +113,7 @@ def on_startup():
     init_db()
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def home():
     return {"message": "Hello World!"}
 
