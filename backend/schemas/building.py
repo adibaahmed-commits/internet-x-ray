@@ -27,3 +27,11 @@ class BuildingDetail(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class BuildingChatRequest(BaseModel):
+    question: str
+
+
+class BuildingChatResponse(BaseModel):
+    answer: str

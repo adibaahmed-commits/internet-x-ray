@@ -8,6 +8,8 @@ from schemas.building import BuildingDetail
 from services.places_service import get_nearby_places
 from services.gemini_service import analyze_building_image, BuildingAnalysisError
 from services.storage_service import UPLOAD_DIR
+from schemas.building import BuildingChatRequest, BuildingChatResponse
+from services.chat_service import answer_building_question
 
 router = APIRouter()
 
@@ -82,3 +84,14 @@ def analyze_building(building_id: int, db: Session = Depends(get_db)):
         schools=schools,
         shopping_centers=shopping_centers,
     )
+
+@router.post("/buildings/{building_id}/chat", response_model=BuildingChatResponse)
+def chat_about_building(building_id: int, req: BuildingChatRequest, db: Session = Depends(get_db)):
+    building = db.query(Building).filter(Building.id == building_id).first()
+
+    if not building or not building.analysis_json:
+        raise HTTPException(status_code=404, detail="No analysis available for this building")
+
+    analysis = json.loads(building.analysis_json)
+    answer = answer_building_question(analysis, req.question)
+    return BuildingChatResponse(answer=answer)
