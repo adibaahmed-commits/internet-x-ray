@@ -35,10 +35,19 @@ Return ONLY valid JSON (no backticks, no extra text) matching exactly this shape
   "summary": string
 }
 
+"estimated_rental_price": string or null,
+  "visible_amenities": list of strings,
+  "confidence": "high" | "medium" | "low",
+  "summary": string
+}
+
+All monetary estimates (such as estimated_rental_price) must be given in
+Indian Rupees, formatted like "₹15,000/month". Do not use dollars or any
+other currency.
+
 If the image does not clearly show a building, still return this shape,
 setting confidence to "low" and explaining in summary.
 """
-
 REQUIRED_FIELDS = [
     "building_type", "estimated_year_built", "estimated_stories",
     "condition", "exterior_material", "notable_features",
